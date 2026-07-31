@@ -1,33 +1,33 @@
 import express, {type Request,type Response} from 'express';
 import { isIP } from 'node:net';
+import { PrismaClient } from '@prisma/client';
+import { PrismaPg } from '@prisma/adapter-pg';
+import pg from 'pg';
+import 'dotenv/config';
 
 const app = express();
 const PORT = 3000;
 
+const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
+const adapter = new PrismaPg(pool);
+const prisma = new PrismaClient({ adapter });
+
 app.use(express.json()); 
 
-// Tüm kullanıcı listesini (diziyi) dönen doğru GET endpoint'i
-app.get('/api/kullanici', (req: Request, res: Response) => {
-  res.json(kullanicilar); // Tek bir obje { id: 1 ... } DEĞİL, doğrudan "kullanicilar" dizisini dönüyoruz
-});
-
 //GET isteği (örnek veri dönme)
-app.get('/api/kullanici', (req: Request, res: Response) => {
-    res.json({
-        id: 1,
-        isim: 'Mehmet',
-        rol: 'Öğrenci',
-        durum: 'Aktif'
-    });
+app.get('/api/kullanici', async (req: Request, res: Response) => {
+    try {
+        const kullanicilar = await prisma.kullanici.findMany();
+        return res.json(kullanicilar);
+    }
+    catch (error) {
+        return res.status(500).json({mesaj: 'Veriler çekilirken hata oluştu.'});
+    }
 });
 
-//Kullanıcı listesi
-let kullanicilar = [
-    {id: 1, isim: 'Mehmet', rol: 'Öğrenci', durum:"Aktif"}
-];
 
 //POST isteği
-app.post('/api/kullanici', (req: Request, res: Response) => {
+app.post('/api/kullanici', async (req: Request, res: Response) => {
     const {isim, rol} = req.body;
 
     if (!isim || !rol) {
@@ -36,60 +36,53 @@ app.post('/api/kullanici', (req: Request, res: Response) => {
         });
     }
 
-    const yeniKullanci = {
-        id: kullanicilar.length+1,
-        isim:isim,
-        rol:rol,
-        durum: 'Aktif'
-    };
-
-    kullanicilar.push(yeniKullanci);
-
-    res.status(201).json({
-        mesaj: 'Kullanıcı başarıyla eklendi',
-        kullanıcı: yeniKullanci
-    });
-});
-
-
-
-app.delete('/api/kullanici/:id', (req: Request, res: Response) => {
-    const silinecek_id = Number(req.params.id);
-    
-    const varMi = kullanicilar.find(k => k.id === silinecek_id);
-
-    if(!varMi) {
-        return res.status(404).json({
-            mesaj: "Bu id'ye sahip kullanıcı bulunamadı!"
+    try {
+        const yeniKullanici = await prisma.kullanici.create({
+            data: {
+                isim,
+                rol,
+            },
         });
+        return res.status(201).json(yeniKullanici);
     }
-
-    kullanicilar = kullanicilar.filter(k => k.id !== silinecek_id);
-
-    return res.json({
-    mesaj: 'Kullanıcı başarıyla silindi',
-    silinenId: silinecek_id
-    });
+    catch (error) {
+        return res.status(500).json({mesaj: 'Kullanıcı eklenirken hata oluştu.'})
+    }
 });
 
-app.put('/api/kullanici/:id', (req: Request, res: Response) => {
+
+
+app.delete('/api/kullanici/:id', async (req: Request, res: Response) => {
+    const silinecek_id = Number(req.params.id);
+
+    try{
+        const silinen = await prisma.kullanici.delete({
+            where: {id: silinecek_id},
+        });
+        return res.json({mesaj: 'Kullanıcı veritabanından silindi: ', silinen});
+    }
+    catch (error) {
+        return res.status(404).json({mesaj: "Bu id ile kullanıcı bulunamadı!"});
+    }
+});
+
+app.put('/api/kullanici/:id', async (req: Request, res: Response) => {
   const gelenId = Number(req.params.id);
+  const {isim,rol} = req.body;
 
-  const mevcutKullanici = kullanicilar.find(k => k.id === gelenId);
-
-  if (!mevcutKullanici) {
-    return res.status(404).json({
-      mesaj: "Bu id'ye sahip kullanıcı bulunamadı!"
+  try {
+    const guncellenen_kullanici = await prisma.kullanici.update({
+        where: {id: gelenId},
+        data: {
+            ...(isim && {isim}),
+            ...(rol && {rol}),
+        }
     });
+    return res.json({ mesaj: "Kullanıcı bilgileri güncellendi."})
   }
-
-  if (req.body.isim) mevcutKullanici.isim = req.body.isim;
-  if (req.body.rol) mevcutKullanici.rol = req.body.rol;
-
-  return res.json({
-    mesaj: 'Kullanıcı güncellendi',
-    kullanici: mevcutKullanici
-  });
+  catch (error) {
+    return res.status(404).json({mesaj: "Bu id ile kullanıcı bulunamadı!"});
+  }
 });
 
 //Sunucuyu başlat

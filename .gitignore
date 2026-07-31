@@ -1,3 +1,26 @@
-node_modules
-dist
+# Node Dependencies
+node_modules/
+
+# Build & Dist Outputs
+dist/
+build/
+
+# Environment & Secret Files
 .env
+.env.*
+!.env.example
+
+# Database & Migration Caches
+prisma/migrations/dev.db
+prisma/migrations/dev.db-journal
+
+# AI Tools & IDE Settings
+.claude/
+.agents/
+.windsurf/
+.vscode/
+.idea/
+
+# OS Generated Files
+.DS_Store
+Thumbs.db
