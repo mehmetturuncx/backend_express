@@ -1,4 +1,4 @@
-import express, {type Request,type Response} from 'express';
+import express, {type Request,type Response, type NextFunction} from 'express';
 import { PrismaClient } from '@prisma/client';
 import { PrismaPg } from '@prisma/adapter-pg';
 import pg from 'pg';
@@ -28,7 +28,7 @@ const loginSchema = z.object({
 });
 
 //GET isteği (örnek veri dönme)
-app.get('/api/kullanici', async (req: Request, res: Response) => {
+app.get('/api/kullanici', async (req: Request, res: Response, next: NextFunction) => {
     try {
         const kullanicilar = await prisma.kullanici.findMany({
             select: {
@@ -37,12 +37,12 @@ app.get('/api/kullanici', async (req: Request, res: Response) => {
                 email: true,
                 rol: true,
                 createdAt: true
-            }
+            } 
         });
         return res.json(kullanicilar);
     }
     catch (error) {
-        return res.status(500).json({mesaj: 'Veriler çekilirken hata oluştu.'});
+        next(error);
     }
 });
 
@@ -206,4 +206,13 @@ app.put('/api/kullanici/:id', async (req: Request, res: Response) => {
 //Sunucuyu başlat
 app.listen(PORT, () => {
     console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor...`)
+});
+
+app.use((err: any, req: Request, res: Response, next: NextFunction) => {
+    console.error('🔥 Sunucu Hatası Yakalandı:', err.stack);
+
+    return res.status(500).json({
+        mesaj: 'Sunucu tarafında bir hata oluştu!',
+        hata: err.message || 'Bilinmeyen hata'
+    });
 });
