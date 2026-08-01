@@ -18,7 +18,15 @@ app.use(express.json());
 //GET isteği (örnek veri dönme)
 app.get('/api/kullanici', async (req: Request, res: Response) => {
     try {
-        const kullanicilar = await prisma.kullanici.findMany();
+        const kullanicilar = await prisma.kullanici.findMany({
+            select: {
+                id: true,
+                isim: true,
+                email: true,
+                rol: true,
+                createdAt: true
+            }
+        });
         return res.json(kullanicilar);
     }
     catch (error) {
@@ -84,7 +92,9 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
         }
 
         const token = jwt.sign(
-            {id: kullanici.id},
+            {id: kullanici.id,
+             rol: kullanici.rol
+            },
             process.env.JWT_SECRET || "varsayilan_secret",
             {expiresIn: "1h"}
         );
@@ -101,6 +111,7 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
 
 interface AuthRequest extends Request {
     kullaniciId?: number;
+    kullaniciRol?: string;
 }
 
 const authKontrol = (req: AuthRequest, res: Response, next: Function) => {
@@ -119,9 +130,10 @@ const authKontrol = (req: AuthRequest, res: Response, next: Function) => {
         const cozulmusToken = jwt.verify(
             token,
             process.env.JWT_SECRET || 'varsayilan_secret'
-        ) as unknown as{id: number};
+        ) as unknown as{ id: number, rol: string};
 
         req.kullaniciId = cozulmusToken.id;
+        req.kullaniciRol = cozulmusToken.rol;
         next();
     }
     catch (error) {
@@ -133,8 +145,9 @@ const authKontrol = (req: AuthRequest, res: Response, next: Function) => {
 app.delete('/api/kullanici/:id',authKontrol,async (req: AuthRequest, res: Response) => {
     const silinecek_id = Number(req.params.id);
     const istekAtanId = req.kullaniciId;
+    const istekAtanRol = req.kullaniciRol;
 
-    if (istekAtanId !== silinecek_id){
+    if (istekAtanRol !== "Admin" && istekAtanId !== silinecek_id){
         return res.status(403).json({mesaj: "Sadece kendi hesabınızı silebilirsiniz!"});
     }
     
