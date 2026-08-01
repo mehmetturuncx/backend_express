@@ -5,6 +5,7 @@ import pg from 'pg';
 import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import  jwt from 'jsonwebtoken';
+import z from 'zod';
 
 const app = express();
 const PORT = 3000;
@@ -14,6 +15,17 @@ const adapter = new PrismaPg(pool);
 const prisma = new PrismaClient({ adapter });
 
 app.use(express.json()); 
+
+const registerSchema = z.object({
+    email: z.email("Geçerli bir email girin."),
+    sifre: z.string().min(6, "Şifreniz en az 6 karakter uzunluğunda olmalıdır."),
+    isim: z.string().min(2, "İsminiz en az 2 karakter uzunluğunda olmalıdır.")
+});
+
+const loginSchema = z.object({
+    email: z.email("Geçerli bir email girin."),
+    sifre: z.string().min(6, "Şifreniz en az 6 karakter uzunluğunda olmalıdır."),
+});
 
 //GET isteği (örnek veri dönme)
 app.get('/api/kullanici', async (req: Request, res: Response) => {
@@ -35,11 +47,16 @@ app.get('/api/kullanici', async (req: Request, res: Response) => {
 });
 
 app.post('/api/auth/register', async (req:Request, res: Response) => {
-    const {email,sifre,isim} = req.body;
+    const dogrulama = registerSchema.safeParse(req.body);
 
-    if (!email || !sifre || !isim){
-        return res.status(400).json({mesaj: "Email, şifre ve isim alanları zorunludur!"});
+    if(!dogrulama.success) {
+        return res.status(400).json({
+            mesaj: "Girdiğiniz bilgiler kurallara uygun değil!",
+            hatalar: dogrulama.error.issues
+        });
     }
+
+    const {email,sifre,isim} = dogrulama.data;
 
     try{
         const varMi = await prisma.kullanici.findUnique({where: {email}});
@@ -73,11 +90,16 @@ app.post('/api/auth/register', async (req:Request, res: Response) => {
 });
 
 app.post("/api/auth/login", async (req: Request, res: Response) => {
-    const {email,sifre} = req.body;
+    const dogrulama = loginSchema.safeParse(req.body);
 
-    if (!email || !sifre) {
-        return res.status(400).json({mesaj: "Email ve şifre alanları zorunludur!"});
+    if(!dogrulama.success) {
+        return res.status(400).json({
+            mesaj: "Hatalı email ya da şifre!",
+            hatalar: dogrulama.error.issues
+        });
     }
+    const {email,sifre} = dogrulama.data;
+
 
     try {
         const kullanici = await prisma.kullanici.findUnique({where: {email}});
