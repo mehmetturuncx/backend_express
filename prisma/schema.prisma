@@ -13,8 +13,9 @@ datasource db {
 
 model Kullanici {
   id Int @id @default(autoincrement())
+  email String @unique
+  sifre String
   isim String
-  rol String
-  durum String @default("Aktif")
+  rol String @default("User")
   createdAt DateTime @default(now())
 }
