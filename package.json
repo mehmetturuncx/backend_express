@@ -5,7 +5,9 @@
   "main": "index.js",
   "scripts": {
     "test": "jest --forceExit",
-    "dev": "tsx watch src/index.ts"
+    "dev": "tsx watch src/index.ts",
+    "build": "swc src -d dist",
+    "start": "node dist/src/index.js"
   },
   "keywords": [],
   "author": "",
@@ -27,6 +29,7 @@
     "zod": "^4.4.3"
   },
   "devDependencies": {
+    "@swc/cli": "^0.8.1",
     "@swc/core": "^1.15.47",
     "@swc/jest": "^0.2.39",
     "@types/bcryptjs": "^2.4.6",

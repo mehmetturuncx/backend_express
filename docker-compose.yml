@@ -1,0 +1,35 @@
+services:
+  # 1. Bizim Yazdığımız Node.js API'si
+  api:
+    build: . # Bulunduğumuz dizindeki Dockerfile'ı kullanarak imajı oluştur
+    ports:
+      - "3000:3000" # Bilgisayarının 3000 portunu konteynerin 3000 portuna bağla
+    environment:
+      - DATABASE_URL=postgresql://admin:gizlisifre@db:5432/projem_db?schema=public
+      - JWT_SECRET=senin_gizli_anahtarin
+      - REDIS_URL=redis://redis_cache:6379
+    depends_on:
+      - db
+      - redis_cache
+
+  # 2. PostgreSQL Veritabanı
+  db:
+    image: postgres:15-alpine
+    environment:
+      - POSTGRES_USER=admin
+      - POSTGRES_PASSWORD=gizlisifre
+      - POSTGRES_DB=projem_db
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Veriler silinmesin diye kalıcı hafıza
+
+  # 3. Redis Önbellek
+  redis_cache:
+    image: redis:7-alpine
+    ports:
+      - "6380:6379"
+
+# Kalıcı hafıza tanımlaması
+volumes:
+  postgres_data:
