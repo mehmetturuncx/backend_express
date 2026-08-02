@@ -7,12 +7,12 @@ import bcrypt from 'bcryptjs';
 import  jwt from 'jsonwebtoken';
 import z from 'zod';
 
-const app = express();
 const PORT = 3000;
 
 const pool = new pg.Pool({ connectionString: process.env.DATABASE_URL });
 const adapter = new PrismaPg(pool);
-const prisma = new PrismaClient({ adapter });
+export const prisma = new PrismaClient({ adapter });
+export const app = express();
 
 app.use(express.json()); 
 
@@ -203,11 +203,11 @@ app.put('/api/kullanici/:id', async (req: Request, res: Response) => {
   }
 });
 
-//Sunucuyu başlat
-app.listen(PORT, () => {
-    console.log(`Sunucu http://localhost:${PORT} adresinde çalışıyor...`)
-});
-
+if (process.env.NODE_ENV !== 'test') {
+    app.listen(3000, () => {
+        console.log('Sunucu http://localhost:3000 adresinde çalışıyor...');
+    });
+}
 app.use((err: any, req: Request, res: Response, next: NextFunction) => {
     console.error('🔥 Sunucu Hatası Yakalandı:', err.stack);
 
