@@ -9,6 +9,8 @@ import z from 'zod';
 import {redis} from './redis.js';
 import rateLimit from 'express-rate-limit';
 import {RedisStore} from 'rate-limit-redis';
+import morgan from 'morgan';
+import {logger} from '../src/utils/logger.js';
 
 const PORT = 3000;
 
@@ -35,6 +37,16 @@ const genelLimiter = rateLimit({
 });
 
 app.use(genelLimiter);
+
+const morganFormat = "dev";
+
+app.use(morgan(morganFormat, {
+    stream: {
+        write: (message) => {
+            logger.info(message.trim());
+        }
+    }
+}));
 
 const registerSchema = z.object({
     email: z.email("Geçerli bir email girin."),

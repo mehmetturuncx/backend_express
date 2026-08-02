@@ -24,3 +24,6 @@ prisma/migrations/dev.db-journal
 # OS Generated Files
 .DS_Store
 Thumbs.db
+
+#Logs
+logs/
