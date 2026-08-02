@@ -60,25 +60,55 @@ const loginSchema = z.object({
 });
 
 app.get('/api/kullanici', async (req, res, next) => {
-    try {
-        const cachedUsers = await redis.get('kullanicilar');
+    let {sayfa, limit} = req.query;
 
-        if (cachedUsers) {
-            return res.status(200).json({ 
-                kaynak: 'cache', 
-                data: JSON.parse(cachedUsers) 
-            });
+    const sayfaNumarasi = Number(sayfa) || 1;
+    const limitSayisi = Number(limit) || 10;
+
+    const skip = (sayfaNumarasi - 1) * limitSayisi;
+    
+    try {
+        const cacheKey = `kullanicilar_${sayfaNumarasi}_${limitSayisi}`;
+        const cachedData = await redis.get(cacheKey);
+
+        if (cachedData) {
+            return res.status(200).json(JSON.parse(cachedData));
         }
+        const toplamKayit = await prisma.kullanici.count();
+        const toplamSayfa = Math.ceil(toplamKayit / limitSayisi);
 
         const kullanicilar = await prisma.kullanici.findMany({
-            select: { id: true, isim: true, email: true, rol: true }
+            select: { id: true, isim: true, email: true, rol: true },
+            skip:skip,
+            take: limitSayisi,
         });
 
-        await redis.setex('kullanicilar', 60, JSON.stringify(kullanicilar));
+        const responseData = {
+            kaynak: 'database',
+            data: kullanicilar,
+            sayfa: sayfaNumarasi,
+            sayfaSayisi: toplamSayfa,
+            kayitSayisi: toplamKayit,
+        };
+
+        await redis.setex(
+            cacheKey, 
+            60, 
+            JSON.stringify({ 
+                kaynak: 'cache',
+                data: responseData.data,
+                sayfa: responseData.sayfa,
+                sayfaSayisi: responseData.sayfaSayisi,
+                kayitSayisi: responseData.kayitSayisi
+            })
+        );
 
         res.status(200).json({
             kaynak: 'database',
-            data: kullanicilar
+            data: kullanicilar,
+            sayfa: sayfaNumarasi,
+            sayfaSayisi: toplamSayfa,
+            kayıtSayisi: toplamKayit,
         });
     } catch (error) {
         next(error);
@@ -113,7 +143,11 @@ app.post('/api/auth/register', async (req:Request, res: Response) => {
             },
         });
 
-        await redis.del('kullanicilar');
+        const keys = await redis.keys('kullanicilar_*');
+
+        if (keys.length > 0) {
+            await redis.del(...keys);
+        }
 
         return res.status(201).json({
             mesaj: "Kullanıcı başarıyla oluşturuldu!",
