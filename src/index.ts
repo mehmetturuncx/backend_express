@@ -6,6 +6,9 @@ import 'dotenv/config';
 import bcrypt from 'bcryptjs';
 import  jwt from 'jsonwebtoken';
 import z from 'zod';
+import {redis} from './redis.js';
+import rateLimit from 'express-rate-limit';
+import {RedisStore} from 'rate-limit-redis';
 
 const PORT = 3000;
 
@@ -15,6 +18,23 @@ export const prisma = new PrismaClient({ adapter });
 export const app = express();
 
 app.use(express.json()); 
+
+const genelLimiter = rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 100,
+    standardHeaders: true,
+    legacyHeaders: false,
+    store: new RedisStore({
+        sendCommand: (...args: string[]) => {
+            const command = args[0]!;
+            const commandArgs = args.slice(1);
+            return redis.call(command, ...commandArgs) as any;
+        },
+    }),
+    message: {error: 'Çok fazla istek attınız, lütfen daha sonra tekrar deneyim.'}
+});
+
+app.use(genelLimiter);
 
 const registerSchema = z.object({
     email: z.email("Geçerli bir email girin."),
@@ -27,21 +47,28 @@ const loginSchema = z.object({
     sifre: z.string().min(6, "Şifreniz en az 6 karakter uzunluğunda olmalıdır."),
 });
 
-//GET isteği (örnek veri dönme)
-app.get('/api/kullanici', async (req: Request, res: Response, next: NextFunction) => {
+app.get('/api/kullanici', async (req, res, next) => {
     try {
+        const cachedUsers = await redis.get('kullanicilar');
+
+        if (cachedUsers) {
+            return res.status(200).json({ 
+                kaynak: 'cache', 
+                data: JSON.parse(cachedUsers) 
+            });
+        }
+
         const kullanicilar = await prisma.kullanici.findMany({
-            select: {
-                id: true,
-                isim: true,
-                email: true,
-                rol: true,
-                createdAt: true
-            } 
+            select: { id: true, isim: true, email: true, rol: true }
         });
-        return res.json(kullanicilar);
-    }
-    catch (error) {
+
+        await redis.setex('kullanicilar', 60, JSON.stringify(kullanicilar));
+
+        res.status(200).json({
+            kaynak: 'database',
+            data: kullanicilar
+        });
+    } catch (error) {
         next(error);
     }
 });
@@ -73,6 +100,8 @@ app.post('/api/auth/register', async (req:Request, res: Response) => {
                 isim,
             },
         });
+
+        await redis.del('kullanicilar');
 
         return res.status(201).json({
             mesaj: "Kullanıcı başarıyla oluşturuldu!",
