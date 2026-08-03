@@ -11,6 +11,7 @@ import rateLimit from 'express-rate-limit';
 import {RedisStore} from 'rate-limit-redis';
 import morgan from 'morgan';
 import {logger} from '../src/utils/logger.js';
+import { upload } from './middalewares/upload.js';
 
 const PORT = 3000;
 
@@ -20,6 +21,7 @@ export const prisma = new PrismaClient({ adapter });
 export const app = express();
 
 app.use(express.json()); 
+app.use('/uploads', express.static('uploads'));
 
 const genelLimiter = rateLimit({
     windowMs: 15 * 60 * 1000,
@@ -204,7 +206,20 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     catch (error) {
         return res.status(500).json({mesaj: "Giriş yapılırken bir hata oluştu!"});
     }
-})
+});
+
+app.post('/api/kullanici/avatar', upload.single('profil_foto'), (req,res) => {
+    if (!req.file) {
+        return res.status(400).json({hata: "Dosya yüklenemedi veya geçersiz format!"});
+    }
+
+    res.status(200).json({
+        mesaj: "Profil fotoğrafı başarıyla yüklendi",
+        dosyaYolu: req.file.path,
+        dosyaAdi: req.file.filename,
+        erisimLinki: `http://localhost:3000/uploads/${req.file.filename}`
+    });
+});
 
 interface AuthRequest extends Request {
     kullaniciId?: number;
