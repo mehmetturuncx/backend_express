@@ -61,7 +61,38 @@ const loginSchema = z.object({
     sifre: z.string().min(6, "Şifreniz en az 6 karakter uzunluğunda olmalıdır."),
 });
 
-app.get('/api/kullanici', async (req, res, next) => {
+const authKontrol = (req: AuthRequest, res: Response, next: Function) => {
+    const authHeader = req.headers.authorization;
+
+    if (!authHeader || !authHeader.startsWith("Bearer ")) {
+        return res.status(401).json({mesaj: "Yetkisiz erişim! Token bulunamadı!"});
+    }
+    const token = authHeader.split(' ')[1];
+
+    if(!token) {
+        return res.status(401).json({mesaj: "Yetkisiz erişim, format hatalı!"});
+    }
+
+    try {
+        const cozulmusToken = jwt.verify(
+            token,
+            process.env.JWT_SECRET || 'varsayilan_secret'
+        ) as unknown as{ id: number, rol: string};
+
+        req.kullaniciId = cozulmusToken.id;
+        req.kullaniciRol = cozulmusToken.rol;
+        next();
+    }
+    catch (error) {
+        return res.status(403).json({mesaj: "Geçersiz veya süresi dolmuş token!"});
+    }
+};
+
+app.get('/api/kullanici', authKontrol, async (req: AuthRequest, res: Response, next) => {
+    const kullaniciId = req.kullaniciId;
+    if(!kullaniciId) {
+        return res.status(401).json({mesaj: "Kullanıcı doğrulanamadı!"});
+    }
     let {sayfa, limit} = req.query;
 
     const sayfaNumarasi = Number(sayfa) || 1;
@@ -208,51 +239,39 @@ app.post("/api/auth/login", async (req: Request, res: Response) => {
     }
 });
 
-app.post('/api/kullanici/avatar', upload.single('profil_foto'), (req,res) => {
+app.post('/api/kullanici/avatar', authKontrol, upload.single('profil_foto'), async (req: AuthRequest,res: Response) => {
     if (!req.file) {
         return res.status(400).json({hata: "Dosya yüklenemedi veya geçersiz format!"});
     }
 
-    res.status(200).json({
-        mesaj: "Profil fotoğrafı başarıyla yüklendi",
-        dosyaYolu: req.file.path,
-        dosyaAdi: req.file.filename,
-        erisimLinki: `http://localhost:3000/uploads/${req.file.filename}`
-    });
+    const erisimLinki = `http://localhost:3000/uploads/${req.file.filename}`;
+    const kullaniciId = req.kullaniciId;
+
+    if(!kullaniciId) {
+        return res.status(401).json({hata: "Kullanıcı doğrulanamadı!"});
+    }
+    
+    try{
+        await prisma.kullanici.update({
+            where: {id: kullaniciId},
+            data: {avatar: erisimLinki}
+        });
+        res.status(200).json({
+            mesaj: "Profil fotoğrafı başarıyla yüklendi",
+            dosyaYolu: req.file.path,
+            dosyaAdi: req.file.filename,
+            erisimLinki: erisimLinki
+        });
+    }
+    catch (error) {
+        return res.status(500).json({mesaj: "Veritabanı güncellernirken bir hata oluştu!"});
+    }
 });
 
 interface AuthRequest extends Request {
     kullaniciId?: number;
     kullaniciRol?: string;
 }
-
-const authKontrol = (req: AuthRequest, res: Response, next: Function) => {
-    const authHeader = req.headers.authorization;
-
-    if (!authHeader || !authHeader.startsWith("Bearer ")) {
-        return res.status(401).json({mesaj: "Yetkisiz erişim! Token bulunamadı!"});
-    }
-    const token = authHeader.split(' ')[1];
-
-    if(!token) {
-        return res.status(401).json({mesaj: "Yetkisiz erişim, format hatalı!"});
-    }
-
-    try {
-        const cozulmusToken = jwt.verify(
-            token,
-            process.env.JWT_SECRET || 'varsayilan_secret'
-        ) as unknown as{ id: number, rol: string};
-
-        req.kullaniciId = cozulmusToken.id;
-        req.kullaniciRol = cozulmusToken.rol;
-        next();
-    }
-    catch (error) {
-        return res.status(403).json({mesaj: "Geçersiz veya süresi dolmuş token!"});
-    }
-};
-
 
 app.delete('/api/kullanici/:id',authKontrol,async (req: AuthRequest, res: Response) => {
     const silinecek_id = Number(req.params.id);

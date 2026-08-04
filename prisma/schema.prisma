@@ -17,5 +17,6 @@ model Kullanici {
   sifre String
   isim String
   rol String @default("User")
+  avatar String?
   createdAt DateTime @default(now())
 }
